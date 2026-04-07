@@ -15,6 +15,12 @@ CRAWL_YEAR_FROM    = 2020
 MAX_PDFS           = 500
 REQUEST_DELAY      = 1.5
 REQUEST_TIMEOUT    = 30
+REQUEST_HEADERS    = {
+    "User-Agent": (
+        "Mozilla/5.0 (educational research bot; "
+        "RBI circular RAG; schowdhury3434@gmail.com)"
+    )
+}
 
 CHUNK_SIZE      = 500
 CHUNK_OVERLAP   = 100
