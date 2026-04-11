@@ -2,6 +2,7 @@
 import sys, logging
 import fitz, pandas as pd
 from pathlib import Path
+from tqdm import tqdm
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 sys.path.append(str(Path(__file__).parent.parent))
@@ -35,15 +36,22 @@ class PDFParser:
             log.error(f"{pdf_path.name}: {e}")
         return pages
 
+    def _get_meta(self, filename: str) -> dict:
+        if self.meta_df is not None and filename in self.meta_df.index:
+            r = self.meta_df.loc[filename]
+            return {k: r.get(k, "") for k in ["circular_no", "date", "subject", "department"]}
+        return {"circular_no": Path(filename).stem, "date": "", "subject": "", "department": ""}
+
     def parse_pdf_to_documents(self, pdf_path: Path) -> list:
         pages = self.extract_text(pdf_path)
         if not pages: return []
-        docs = []
+        meta  = self._get_meta(pdf_path.name)
+        docs  = []
         for page in pages:
             for idx, chunk in enumerate(self.splitter.split_text(page["text"])):
                 docs.append(Document(
                     page_content=chunk,
-                    metadata={"source": pdf_path.name,
+                    metadata={**meta, "source": pdf_path.name,
                               "page": page["page_num"], "chunk_id": idx}
                 ))
         return docs
@@ -51,4 +59,5 @@ class PDFParser:
     def parse_all(self, limit=None) -> list:
         pdfs = sorted(PDF_DIR.glob("*.pdf"))
         if limit: pdfs = pdfs[:limit]
-        return [doc for p in pdfs for doc in self.parse_pdf_to_documents(p)]
+        log.info(f"Parsing {len(pdfs)} PDFs")
+        return [doc for p in tqdm(pdfs, desc="Parsing") for doc in self.parse_pdf_to_documents(p)]
