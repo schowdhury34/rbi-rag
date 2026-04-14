@@ -1,4 +1,4 @@
-# config.py
+# config.py — tuned after testing on 50 circulars
 import os
 from pathlib import Path
 
@@ -22,20 +22,22 @@ REQUEST_HEADERS    = {
     )
 }
 
-CHUNK_SIZE      = 500
-CHUNK_OVERLAP   = 100
+# Tuned: 800/150 gives better context continuity than 500/100
+CHUNK_SIZE      = 800
+CHUNK_OVERLAP   = 150
+
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_BATCH = 64
 COLLECTION_NAME = "rbi_circulars"
 TOP_K           = 5
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL   = "llama-3.1-8b-instant"
+GROQ_MODEL   = "llama-3.1-70b-versatile"
 
 SYSTEM_PROMPT = """You are an expert RBI regulations assistant.
 Answer using ONLY the context below.
-Cite circular number, date, and department.
-If not found, say so.
+Always cite circular number, date, and department.
+If the answer is not in the context, say so clearly.
 
 Context:
 {context}
