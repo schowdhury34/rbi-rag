@@ -1,4 +1,4 @@
-# ingest/embedder.py
+# ingest/embedder.py — with incremental ingestion
 import sys, logging
 from pathlib import Path
 from tqdm import tqdm
@@ -15,15 +15,13 @@ log = logging.getLogger(__name__)
 class Embedder:
     def __init__(self):
         CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-        log.info(f"Loading model: {EMBEDDING_MODEL}")
         self.model  = SentenceTransformer(EMBEDDING_MODEL)
         self.client = chromadb.PersistentClient(
             path=str(CHROMA_DIR),
             settings=Settings(anonymized_telemetry=False)
         )
         self.collection = self.client.get_or_create_collection(
-            name=COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"}
+            name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
         )
         log.info(f"Collection has {self.collection.count()} chunks")
 
@@ -31,8 +29,14 @@ class Embedder:
         m = doc.metadata
         return f"{m.get('source','x')}_p{m.get('page',0)}_c{m.get('chunk_id',0)}"
 
-    def embed_and_store(self, documents: list):
-        log.info(f"Embedding {len(documents)} chunks...")
+    def embed_and_store(self, documents: list, incremental: bool = True):
+        if incremental:
+            existing = set(self.collection.get(include=[])["ids"])
+            documents = [d for d in documents if self._chunk_id(d) not in existing]
+        if not documents:
+            log.info("Nothing new to embed")
+            return
+        log.info(f"Embedding {len(documents)} new chunks...")
         for start in tqdm(range(0, len(documents), EMBEDDING_BATCH), desc="Embedding"):
             batch  = documents[start: start + EMBEDDING_BATCH]
             texts  = [d.page_content for d in batch]
