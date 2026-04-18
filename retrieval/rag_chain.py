@@ -4,7 +4,7 @@ from pathlib import Path
 from groq import Groq
 sys.path.append(str(Path(__file__).parent.parent))
 from ingest.embedder import Embedder
-from config import GROQ_API_KEY, GROQ_MODEL, TOP_K
+from config import GROQ_API_KEY, GROQ_MODEL, SYSTEM_PROMPT, TOP_K
 
 log = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ class RAGChain:
             raise ValueError("GROQ_API_KEY not set — add it to your .env file")
         self.llm   = Groq(api_key=GROQ_API_KEY)
         self.store = Embedder()
+        log.info(f"RAGChain ready | model={GROQ_MODEL}")
 
     def retrieve(self, query: str, top_k: int = TOP_K, filters: dict = None):
         return self.store.query(query, top_k=top_k, where=filters)
@@ -23,22 +24,29 @@ class RAGChain:
         parts = []
         for i, c in enumerate(chunks, 1):
             m = c["metadata"]
-            parts.append(f"[{i}] {m.get('circular_no','')} | {m.get('date','')}\n{c['text']}")
+            header = (
+                f"[Source {i}] Circular: {m.get('circular_no','N/A')} | "
+                f"Date: {m.get('date','N/A')} | "
+                f"Dept: {m.get('department','N/A')} | "
+                f"Subject: {m.get('subject','N/A')}"
+            )
+            parts.append(f"{header}\n{c['text']}")
         return "\n\n---\n\n".join(parts)
 
     def generate(self, query: str, context: str) -> str:
         resp = self.llm.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system",  "content": f"Answer using this context:\n{context}"},
-                {"role": "user",    "content": query},
+                {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
+                {"role": "user",   "content": query},
             ],
+            temperature=0.3,
             max_tokens=1024,
         )
         return resp.choices[0].message.content
 
-    def answer(self, query: str, **kwargs) -> dict:
-        chunks  = self.retrieve(query)
+    def answer(self, query: str, top_k=TOP_K, filters=None, return_sources=True) -> dict:
+        chunks  = self.retrieve(query, top_k=top_k, filters=filters)
         context = self.build_context(chunks)
         ans     = self.generate(query, context)
-        return {"answer": ans, "sources": [c["metadata"] for c in chunks]}
+        return {"answer": ans, "sources": [c["metadata"] for c in chunks] if return_sources else []}
