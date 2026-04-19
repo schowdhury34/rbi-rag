@@ -34,13 +34,15 @@ class RAGChain:
         return "\n\n---\n\n".join(parts)
 
     def generate(self, query: str, context: str) -> str:
+        # temperature=0.1: lower hallucination on compliance/regulatory queries
+        # tested at 0.3 — was mixing details across circulars
         resp = self.llm.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
                 {"role": "user",   "content": query},
             ],
-            temperature=0.3,
+            temperature=0.1,
             max_tokens=1024,
         )
         return resp.choices[0].message.content
