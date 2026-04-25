@@ -1,4 +1,4 @@
-# app/streamlit_app.py
+# app/streamlit_app.py — full with chat history
 import sys
 from pathlib import Path
 import streamlit as st
@@ -11,11 +11,12 @@ st.set_page_config(page_title="RBI Circular Assistant", page_icon="🏦", layout
 with st.sidebar:
     st.title("🏦 RBI RAG")
     st.caption(f"Model: {GROQ_MODEL}")
+    st.divider()
     dept_filter  = st.text_input("Department filter", placeholder="e.g. Monetary Policy")
     top_k        = st.slider("Sources to retrieve", 3, 10, 5)
     show_sources = st.toggle("Show source circulars", value=True)
     st.divider()
-    st.caption("For educational/research use only.")
+    st.caption("Educational/research use only.")
 
 st.title("RBI Circular Assistant 🏦")
 
@@ -27,15 +28,33 @@ try:
 except ValueError as e:
     st.error(str(e)); st.stop()
 
-if query := st.chat_input("e.g. What are the MCLR guidelines?"):
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        if msg.get("sources"):
+            with st.expander("📄 Sources"):
+                for s in msg["sources"]:
+                    st.markdown(f"**{s.get('circular_no','N/A')}** ({s.get('date','N/A')})")
+
+if query := st.chat_input("e.g. What are the KYC guidelines?"):
+    st.session_state.messages.append({"role": "user", "content": query})
+    with st.chat_message("user"): st.markdown(query)
     filters = {"department": dept_filter} if dept_filter.strip() else None
-    with st.spinner("Searching circulars..."):
-        result = rag.answer(query, top_k=top_k, filters=filters, return_sources=show_sources)
-    st.markdown(result["answer"])
-    if show_sources and result.get("sources"):
-        with st.expander("📄 Source Circulars"):
-            for s in result["sources"]:
-                st.markdown(
-                    f"**{s.get('circular_no','N/A')}** ({s.get('date','N/A')}) — "
-                    f"{s.get('department','N/A')}\n> {s.get('subject','')[:100]}"
-                )
+    with st.chat_message("assistant"):
+        with st.spinner("Searching..."):
+            result = rag.answer(query, top_k=top_k, filters=filters, return_sources=show_sources)
+        st.markdown(result["answer"])
+        sources = result.get("sources", [])
+        if show_sources and sources:
+            with st.expander("📄 Source Circulars"):
+                for s in sources:
+                    st.markdown(
+                        f"**{s.get('circular_no','N/A')}** ({s.get('date','N/A')}) — "
+                        f"{s.get('department','N/A')}\n> {s.get('subject','')[:100]}"
+                    )
+    st.session_state.messages.append({
+        "role": "assistant", "content": result["answer"], "sources": sources
+    })
