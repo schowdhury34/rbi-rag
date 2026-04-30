@@ -66,7 +66,7 @@ def commit(message, date):
 def write(rel_path, content):
     p = REPO_DIR / rel_path
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(dedent(content).lstrip())
+    p.write_text(dedent(content).lstrip(), encoding="utf-8")
 
 def add_all():
     run(["add", "-A"])
