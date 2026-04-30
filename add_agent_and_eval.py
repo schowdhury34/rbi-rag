@@ -21,9 +21,9 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
-REPO_DIR     = Path(".").resolve()
+REPO_DIR     = Path(r"D:\projects\rbi_rag")
 AUTHOR_NAME  = "Samrat Chowdhury"
-AUTHOR_EMAIL = "samrat@example.com"   # ← change to your GitHub email
+AUTHOR_EMAIL = "schowdhury3434@gmail.com"   # ← change to your GitHub email
 
 # Today's commits — spread across April 30
 DATES = [
