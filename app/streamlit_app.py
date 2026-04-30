@@ -1,9 +1,10 @@
-# app/streamlit_app.py — full with chat history
+# app/streamlit_app.py — with agent mode toggle
 import sys
 from pathlib import Path
 import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
 from retrieval.rag_chain import RAGChain
+from agent.rbi_agent import run_agent
 from config import GROQ_MODEL
 
 st.set_page_config(page_title="RBI Circular Assistant", page_icon="🏦", layout="wide")
@@ -12,13 +13,19 @@ with st.sidebar:
     st.title("🏦 RBI RAG")
     st.caption(f"Model: {GROQ_MODEL}")
     st.divider()
-    dept_filter  = st.text_input("Department filter", placeholder="e.g. Monetary Policy")
+
+    mode = st.radio("Mode", ["RAG (Direct)", "Agent (LangGraph)"],
+                    help="Agent mode uses tool-calling to decide search strategy")
+
+    dept_filter  = st.text_input("Department filter (RAG mode only)",
+                                 placeholder="e.g. Monetary Policy")
     top_k        = st.slider("Sources to retrieve", 3, 10, 5)
     show_sources = st.toggle("Show source circulars", value=True)
     st.divider()
     st.caption("Educational/research use only.")
 
 st.title("RBI Circular Assistant 🏦")
+st.caption(f"Mode: **{mode}**")
 
 @st.cache_resource(show_spinner="Loading RAG system...")
 def load_rag(): return RAGChain()
@@ -39,13 +46,18 @@ for msg in st.session_state.messages:
                 for s in msg["sources"]:
                     st.markdown(f"**{s.get('circular_no','N/A')}** ({s.get('date','N/A')})")
 
-if query := st.chat_input("e.g. What are the KYC guidelines?"):
+if query := st.chat_input("e.g. What are the KYC guidelines for banks?"):
     st.session_state.messages.append({"role": "user", "content": query})
     with st.chat_message("user"): st.markdown(query)
-    filters = {"department": dept_filter} if dept_filter.strip() else None
+
     with st.chat_message("assistant"):
-        with st.spinner("Searching..."):
-            result = rag.answer(query, top_k=top_k, filters=filters, return_sources=show_sources)
+        with st.spinner("Thinking..."):
+            if mode == "Agent (LangGraph)":
+                result = run_agent(query)
+            else:
+                filters = {"department": dept_filter} if dept_filter.strip() else None
+                result  = rag.answer(query, top_k=top_k, filters=filters,
+                                     return_sources=show_sources)
         st.markdown(result["answer"])
         sources = result.get("sources", [])
         if show_sources and sources:
