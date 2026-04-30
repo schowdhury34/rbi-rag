@@ -3,5 +3,8 @@ __pycache__/
 .env
 *.pdf
 data/
+chroma_db/
 .DS_Store
-.venv/
+.ipynb_checkpoints/
+# keep benchmark CSVs in git — they track progress
+!benchmarks/*.csv
