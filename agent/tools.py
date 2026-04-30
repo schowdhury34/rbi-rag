@@ -1,5 +1,5 @@
 # agent/tools.py
-# LangGraph tool definitions — each tool wraps one capability of the RAG system.
+# LangGraph tool definitions â€” each tool wraps one capability of the RAG system.
 # The agent decides which tool to call based on the user query.
 
 import sys
@@ -81,5 +81,5 @@ def circular_summary(circular_no: str) -> str:
     return f"Content of {circular_no}:\n\n{full_text[:1500]}"
 
 
-# Registry — imported by the agent
+# Registry â€” imported by the agent
 ALL_TOOLS = [vector_search, department_search, circular_summary]
