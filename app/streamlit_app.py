@@ -1,10 +1,11 @@
-# app/streamlit_app.py — with agent mode toggle
+# app/streamlit_app.py
 import sys
 from pathlib import Path
 import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
 from retrieval.rag_chain import RAGChain
 from agent.rbi_agent import run_agent
+from ingest.embedder import Embedder
 from config import GROQ_MODEL
 
 st.set_page_config(page_title="RBI Circular Assistant", page_icon="🏦", layout="wide")
@@ -13,11 +14,9 @@ with st.sidebar:
     st.title("🏦 RBI RAG")
     st.caption(f"Model: {GROQ_MODEL}")
     st.divider()
-
-    mode = st.radio("Mode", ["RAG (Direct)", "Agent (LangGraph)"],
-                    help="Agent mode uses tool-calling to decide search strategy")
-
-    dept_filter  = st.text_input("Department filter (RAG mode only)",
+    mode = st.radio("Mode", ["RAG (Hybrid Search)", "Agent (LangGraph)"],
+                    help="Hybrid search combines BM25 + vector similarity")
+    dept_filter  = st.text_input("Department filter (RAG mode)",
                                  placeholder="e.g. Monetary Policy")
     top_k        = st.slider("Sources to retrieve", 3, 10, 5)
     show_sources = st.toggle("Show source circulars", value=True)
@@ -26,6 +25,32 @@ with st.sidebar:
 
 st.title("RBI Circular Assistant 🏦")
 st.caption(f"Mode: **{mode}**")
+
+# ── Guard: check vector store has data before loading RAG ────────────
+@st.cache_resource(show_spinner="Connecting to vector store...")
+def check_collection() -> int:
+    try:
+        return Embedder().collection.count()
+    except Exception:
+        return 0
+
+count = check_collection()
+if count == 0:
+    st.warning(
+        "⚠️ Vector store is empty. "
+        "Run the ingestion pipeline first:\n\n"
+        "```python\n"
+        "from crawl.rbi_crawler import RBICrawler\n"
+        "from ingest.pdf_parser import PDFParser\n"
+        "from ingest.embedder import Embedder\n\n"
+        "RBICrawler().run()\n"
+        "docs = PDFParser().parse_all()\n"
+        "Embedder().embed_and_store(docs)\n"
+        "```"
+    )
+    st.stop()
+
+st.caption(f"📚 {count:,} chunks indexed")
 
 @st.cache_resource(show_spinner="Loading RAG system...")
 def load_rag(): return RAGChain()
