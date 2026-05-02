@@ -1,6 +1,10 @@
-# config.py — tuned after testing on 50 circulars
+# config.py
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file so GROQ_API_KEY is available without manually setting env vars
+load_dotenv()
 
 BASE_DIR  = Path(__file__).parent
 DATA_DIR  = BASE_DIR / "data"
@@ -8,6 +12,10 @@ DATA_DIR  = BASE_DIR / "data"
 PDF_DIR       = DATA_DIR / "pdfs"
 CHROMA_DIR    = DATA_DIR / "chroma_db"
 METADATA_FILE = DATA_DIR / "metadata.csv"
+
+# Create data dirs on import — avoids FileNotFoundError on first run
+PDF_DIR.mkdir(parents=True, exist_ok=True)
+CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 RBI_BASE_URL       = "https://rbi.org.in"
 RBI_CIRCULAR_INDEX = "https://rbi.org.in/Scripts/BS_CircularIndexDisplay.aspx"
@@ -22,10 +30,8 @@ REQUEST_HEADERS    = {
     )
 }
 
-# Tuned: 800/150 gives better context continuity than 500/100
 CHUNK_SIZE      = 800
 CHUNK_OVERLAP   = 150
-
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_BATCH = 64
 COLLECTION_NAME = "rbi_circulars"
@@ -35,9 +41,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL   = "llama-3.1-70b-versatile"
 
 SYSTEM_PROMPT = """You are an expert RBI regulations assistant.
-Answer using ONLY the context below.
-Always cite circular number, date, and department.
-If the answer is not in the context, say so clearly.
+Answer using ONLY the context provided below.
+Always cite the circular number, date, and department.
+If the answer is not in the context, say: "I could not find this in the indexed circulars."
 
 Context:
 {context}
