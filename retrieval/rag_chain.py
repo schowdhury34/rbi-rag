@@ -3,7 +3,7 @@ import sys, logging
 from pathlib import Path
 from groq import Groq
 sys.path.append(str(Path(__file__).parent.parent))
-from ingest.embedder import Embedder
+from retrieval.hybrid_search import HybridSearch
 from config import GROQ_API_KEY, GROQ_MODEL, SYSTEM_PROMPT, TOP_K
 
 log = logging.getLogger(__name__)
@@ -12,13 +12,16 @@ log = logging.getLogger(__name__)
 class RAGChain:
     def __init__(self):
         if not GROQ_API_KEY:
-            raise ValueError("GROQ_API_KEY not set — add it to your .env file")
-        self.llm   = Groq(api_key=GROQ_API_KEY)
-        self.store = Embedder()
-        log.info(f"RAGChain ready | model={GROQ_MODEL}")
+            raise ValueError(
+                "GROQ_API_KEY not set.\n"
+                "Add it to your .env file: GROQ_API_KEY=your_key_here"
+            )
+        self.llm    = Groq(api_key=GROQ_API_KEY)
+        self.search = HybridSearch()
+        log.info(f"RAGChain ready | model={GROQ_MODEL} | search=hybrid BM25+vector")
 
-    def retrieve(self, query: str, top_k: int = TOP_K, filters: dict = None):
-        return self.store.query(query, top_k=top_k, where=filters)
+    def retrieve(self, query: str, top_k: int = TOP_K, filters: dict = None) -> list:
+        return self.search.search(query, top_k=top_k, filters=filters)
 
     def build_context(self, chunks: list) -> str:
         parts = []
@@ -34,8 +37,6 @@ class RAGChain:
         return "\n\n---\n\n".join(parts)
 
     def generate(self, query: str, context: str) -> str:
-        # temperature=0.1: lower hallucination on compliance/regulatory queries
-        # tested at 0.3 — was mixing details across circulars
         resp = self.llm.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
@@ -49,6 +50,14 @@ class RAGChain:
 
     def answer(self, query: str, top_k=TOP_K, filters=None, return_sources=True) -> dict:
         chunks  = self.retrieve(query, top_k=top_k, filters=filters)
+        if not chunks:
+            return {
+                "answer":  "No relevant circulars found for your query.",
+                "sources": []
+            }
         context = self.build_context(chunks)
         ans     = self.generate(query, context)
-        return {"answer": ans, "sources": [c["metadata"] for c in chunks] if return_sources else []}
+        return {
+            "answer":  ans,
+            "sources": [c["metadata"] for c in chunks] if return_sources else []
+        }
