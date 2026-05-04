@@ -4,6 +4,7 @@ from pathlib import Path
 from langchain.tools import tool
 sys.path.append(str(Path(__file__).parent.parent))
 from ingest.embedder import Embedder
+from utils.filters import by_department, by_circular_no
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,6 @@ def get_embedder() -> Embedder:
 
 
 def _format_results(results: list, label: str = "") -> str:
-    """Format retrieved chunks into readable string. Handles empty results."""
     if not results:
         return f"No relevant circulars found{' for ' + label if label else ''}."
     out = []
@@ -36,7 +36,7 @@ def _format_results(results: list, label: str = "") -> str:
 def vector_search(query: str) -> str:
     """
     Search RBI circulars using semantic similarity.
-    Use for conceptual questions like 'explain MCLR' or 'KYC guidelines'.
+    Use for broad conceptual questions like 'explain MCLR' or 'KYC guidelines'.
     """
     try:
         results = get_embedder().query(query, top_k=5)
@@ -50,14 +50,17 @@ def vector_search(query: str) -> str:
 def department_search(query: str, department: str) -> str:
     """
     Search RBI circulars filtered by department.
-    Use when query mentions a department e.g. 'Foreign Exchange', 'Monetary Policy',
+    Use when query mentions: 'Foreign Exchange', 'Monetary Policy',
     'Payment Systems', 'Banking Regulation'.
     Args:
         query: the user question
-        department: exact department name to filter by
+        department: exact department name
     """
     try:
-        results = get_embedder().query(query, top_k=5, where={"department": department})
+        results = get_embedder().query(
+            query, top_k=5,
+            where=by_department(department)
+        )
         return _format_results(results, department)
     except Exception as e:
         log.error(f"department_search error: {e}")
@@ -68,14 +71,14 @@ def department_search(query: str, department: str) -> str:
 def circular_summary(circular_no: str) -> str:
     """
     Retrieve content from a specific circular by its number.
-    Use when user asks about a specific circular e.g. 'RBI/2023-24/56'.
+    Use when user mentions a specific circular e.g. 'RBI/2023-24/56'.
     Args:
         circular_no: the circular number string
     """
     try:
         results = get_embedder().query(
             circular_no, top_k=8,
-            where={"circular_no": circular_no}
+            where=by_circular_no(circular_no)
         )
         return _format_results(results, circular_no)
     except Exception as e:
