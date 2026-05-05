@@ -37,7 +37,7 @@ class RBICrawler:
             return []
 
         soup  = BeautifulSoup(resp.text, "html.parser")
-        table = soup.find("table", {"id": "GridView1"})
+        table = soup.find("table", {"class": "tablebg"})
         if not table:
             log.warning("Circular table not found — RBI may have changed HTML structure")
             return []
