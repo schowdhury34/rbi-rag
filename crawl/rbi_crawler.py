@@ -39,63 +39,81 @@ class RBICrawler:
         soup  = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table", {"class": "tablebg"})
         if not table:
-            log.warning("Circular table not found — RBI may have changed HTML structure")
+            log.warning("Table not found")
             return []
 
-        records  = []
-        skipped  = 0
-        for row in table.find_all("tr")[1:]:
+        records = []
+        for row in table.find_all("tr")[1:]:   # skip header
             cols = row.find_all("td")
             if len(cols) < 4:
                 continue
-            link = cols[2].find("a", href=True)
+
+            link     = cols[0].find("a", href=True)
             if not link:
                 continue
 
-            date_str = cols[0].get_text(strip=True)
+            circ_no  = link.get_text(separator=" ").strip()
+            date_str = cols[1].get_text(strip=True)
+            dept     = cols[2].get_text(strip=True)
+            subject  = cols[3].get_text(strip=True)
 
-            # Skip circulars older than CRAWL_YEAR_FROM
-            year = _parse_year(date_str)
+            # Build detail page URL
+            href        = link["href"]
+            detail_url  = f"{RBI_BASE_URL}/Scripts/{href}" if not href.startswith("http") else href
+            filename    = f"{circ_no.split()[0].replace('/','_')}_{date_str.replace('.','_')}.pdf"
+
+            # Filter by year
+            year = None
+            for part in date_str.replace("-",".").split("."):
+                if len(part) == 4 and part.isdigit():
+                    year = int(part)
             if year and year < CRAWL_YEAR_FROM:
-                skipped += 1
                 continue
-
-            href     = link["href"]
-            url      = href if href.startswith("http") else f"{RBI_BASE_URL}/{href.lstrip('/')}"
-            circ_no  = cols[1].get_text(strip=True)
-            filename = f"{circ_no.replace('/','_')}_{date_str.replace('/','_')}.pdf"
 
             records.append({
                 "circular_no": circ_no,
                 "date":        date_str,
-                "subject":     cols[2].get_text(strip=True),
-                "department":  cols[3].get_text(strip=True),
-                "url":         url,
+                "department":  dept,
+                "subject":     subject,
+                "detail_url":  detail_url,
+                "url":         detail_url,   # updated to PDF in download step
                 "filename":    filename,
             })
             if len(records) >= MAX_PDFS:
                 break
 
-        log.info(f"Found {len(records)} circulars (skipped {skipped} older than {CRAWL_YEAR_FROM})")
+        log.info(f"Found {len(records)} circulars")
         return records
 
     def download_pdf(self, url: str, filename: str) -> bool:
         dest = PDF_DIR / filename
         if dest.exists():
-            return True   # resume-safe
+            return True
         try:
-            r = self.session.get(url, timeout=REQUEST_TIMEOUT, stream=True)
+            # Step 1: fetch detail page to find PDF link
+            r = self.session.get(url, timeout=REQUEST_TIMEOUT)
             r.raise_for_status()
-            if "pdf" not in r.headers.get("Content-Type", "").lower():
-                log.warning(f"Not a PDF: {url}")
+            soup = BeautifulSoup(r.text, "html.parser")
+            pdf_link = soup.find("a", href=lambda h: h and ".pdf" in h.lower())
+            if not pdf_link:
+                log.warning(f"No PDF found on detail page: {url}")
                 return False
+            pdf_url = pdf_link["href"]
+            if not pdf_url.startswith("http"):
+                pdf_url = f"{RBI_BASE_URL}/{pdf_url.lstrip('/')}"
+
+            # Step 2: download the PDF
+            r2 = self.session.get(pdf_url, timeout=REQUEST_TIMEOUT, stream=True)
+            r2.raise_for_status()
             with open(dest, "wb") as f:
-                for chunk in r.iter_content(8192):
+                for chunk in r2.iter_content(8192):
                     f.write(chunk)
             return True
         except Exception as e:
-            log.error(f"Download failed {filename}: {e}")
-            return False
+            log.error(f"Failed {filename}: {e}")
+            return False    
+
+    
 
     def run(self):
         records = self.fetch_circular_index()
