@@ -115,24 +115,50 @@ class RBICrawler:
             log.error(f"Failed {filename}: {e}")
             return False    
 
-    
+    def download_pdf_direct(self, pdf_url: str, filename: str) -> bool:
+        dest = PDF_DIR / filename
+        if dest.exists():
+            return True
+        try:
+            r = self.session.get(pdf_url, timeout=REQUEST_TIMEOUT, stream=True)
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(8192):
+                    f.write(chunk)
+            log.info(f"Downloaded: {filename}")
+            return True
+        except Exception as e:
+            log.error(f"Failed {filename}: {e}")
+            return False    
 
     def run(self):
         records = self.fetch_circular_index()
         master  = self.fetch_master_circulars()
-        records = records + master
-        if not records:
+
+        if not records and not master:
             log.error("No records found. Exiting.")
             return None
+
         ok, fail = 0, 0
-        for r in tqdm(records, desc="Downloading PDFs"):
+
+        # Regular circulars — two-step (detail page → PDF)
+        for r in tqdm(records, desc="Downloading circulars"):
             if self.download_pdf(r["url"], r["filename"]): ok += 1
             else: fail += 1
             time.sleep(REQUEST_DELAY)
-        df = pd.DataFrame(records)
+
+        # Master circulars — direct PDF download
+        for r in tqdm(master, desc="Downloading master circulars"):
+            if self.download_pdf_direct(r["url"], r["filename"]): ok += 1
+            else: fail += 1
+            time.sleep(REQUEST_DELAY)
+
+        all_records = records + master
+        df = pd.DataFrame(all_records)
         df.to_csv(METADATA_FILE, index=False)
         log.info(f"Done — {ok} downloaded, {fail} failed. Metadata saved.")
         return df
+
 
     def fetch_master_circulars(self) -> list:
         log.info(f"Fetching Master Circulars from {RBI_MASTER_CIRCULAR_URL}")
@@ -150,12 +176,19 @@ class RBICrawler:
             href = link["href"]
             if ".pdf" not in href.lower():
                 continue
-            subject  = link.get_text(strip=True)
+
+            subject = link.get_text(strip=True)
             if not subject:
-                continue
+                parent = link.find_parent("td")
+                if parent:
+                    prev = parent.find_previous_sibling("td")
+                    subject = prev.get_text(strip=True) if prev else href.split("/")[-1]
+                else:
+                    subject = href.split("/")[-1]
+
             pdf_url  = href if href.startswith("http") else f"{RBI_BASE_URL}/{href.lstrip('/')}"
-            filename = pdf_url.split("/")[-1]
-            if not filename.endswith(".pdf"):
+            filename = href.split("/")[-1]
+            if not filename.lower().endswith(".pdf"):
                 filename = subject[:50].replace(" ","_").replace("/","_") + ".pdf"
 
             records.append({
@@ -167,8 +200,8 @@ class RBICrawler:
                 "url":         pdf_url,
                 "filename":    filename,
             })
-            if len(records) >= MAX_PDFS:
-                break
 
         log.info(f"Found {len(records)} master circulars")
         return records
+
+    
