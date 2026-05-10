@@ -32,10 +32,10 @@ Answer + Source Citations → Streamlit UI
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
 | Vector Store | ChromaDB (cosine similarity, local) |
 | Search | Hybrid BM25 + Vector with score fusion |
-| Query Rewriting | Groq Llama 3.1 70B (pre-retrieval) |
+| Query Rewriting | Groq Llama 3.3 70B (pre-retrieval) |
 | Re-ranking | LLM cross-encoder scoring (post-retrieval) |
 | Agent | LangGraph ReAct (3 tools) |
-| LLM | Groq API — Llama 3.1 70B (free tier) |
+| LLM | Groq API — Llama 3.3 70B (free tier) |
 | Evaluation | RAGAS — 4 metrics, 20 Q&A pairs |
 | UI | Streamlit (multi-page) |
 
