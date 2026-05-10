@@ -4,9 +4,15 @@ from pathlib import Path
 import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
 from retrieval.rag_chain import RAGChain
-from agent.rbi_agent import run_agent
+#from agent.rbi_agent import run_agent
 from ingest.embedder import Embedder
 from config import GROQ_MODEL
+
+try:
+    from agent.rbi_agent import run_agent
+    AGENT_AVAILABLE = True
+except ImportError:
+    AGENT_AVAILABLE = False
 
 st.set_page_config(
     page_title="RBI Circular Assistant",
@@ -115,7 +121,10 @@ if query := st.chat_input("Ask about RBI circulars..."):
     with st.chat_message("assistant"):
         with st.spinner("Searching circulars..."):
             if mode == "Agent (LangGraph)":
-                result = run_agent(query)
+                if not AGENT_AVAILABLE:
+                    result = {"answer": "Agent mode is temporarily unavailable. Please use RAG (Hybrid Search) mode.", "sources": []}
+                else:
+                    result = run_agent(query)
             else:
                 filters = {"department": dept_filter} if dept_filter.strip() else None
                 result  = rag.answer(

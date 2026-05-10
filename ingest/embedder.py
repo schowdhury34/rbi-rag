@@ -5,7 +5,7 @@ from tqdm import tqdm
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
-from langchain.schema import Document
+from langchain_core.documents import Document
 sys.path.append(str(Path(__file__).parent.parent))
 from config import CHROMA_DIR, COLLECTION_NAME, EMBEDDING_MODEL, EMBEDDING_BATCH, TOP_K
 

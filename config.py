@@ -38,7 +38,7 @@ COLLECTION_NAME = "rbi_circulars"
 TOP_K           = 5
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL   = "llama-3.1-70b-versatile"
+GROQ_MODEL   = "llama-3.3-70b-versatile"
 
 SYSTEM_PROMPT = """You are an expert RBI regulations assistant.
 Answer using ONLY the context provided below.

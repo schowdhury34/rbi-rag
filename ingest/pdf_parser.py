@@ -3,7 +3,7 @@ import sys, re, logging
 import fitz, pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 sys.path.append(str(Path(__file__).parent.parent))
 from config import PDF_DIR, METADATA_FILE, CHUNK_SIZE, CHUNK_OVERLAP
