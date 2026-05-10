@@ -112,12 +112,8 @@ for msg in st.session_state.messages:
                         f"{s.get('department','N/A')}"
                     )
 
-# ── Chat input ────────────────────────────────────────────────────────
-if query := st.chat_input("Ask about RBI circulars..."):
-    st.session_state.messages.append({"role": "user", "content": query})
-    with st.chat_message("user"):
-        st.markdown(query)
-
+# ── Shared answer function ────────────────────────────────────────────
+def process_query(query: str):
     with st.chat_message("assistant"):
         with st.spinner("Searching circulars..."):
             if mode == "Agent (LangGraph)":
@@ -148,3 +144,17 @@ if query := st.chat_input("Ask about RBI circulars..."):
         "content": result["answer"],
         "sources": sources
     })
+
+# Handle sample button clicks (last message is user but unprocessed)
+if (st.session_state.messages
+        and st.session_state.messages[-1]["role"] == "user"
+        and not st.session_state.messages[-1].get("processed")):
+    st.session_state.messages[-1]["processed"] = True
+    process_query(st.session_state.messages[-1]["content"])
+
+# ── Chat input ────────────────────────────────────────────────────────
+if query := st.chat_input("Ask about RBI circulars..."):
+    st.session_state.messages.append({"role": "user", "content": query, "processed": True})
+    with st.chat_message("user"):
+        st.markdown(query)
+    process_query(query)

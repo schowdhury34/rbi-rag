@@ -9,6 +9,8 @@ from config import (RBI_BASE_URL, RBI_CIRCULAR_INDEX, PDF_DIR,
                     METADATA_FILE, MAX_PDFS, REQUEST_DELAY,
                     REQUEST_TIMEOUT, REQUEST_HEADERS, CRAWL_YEAR_FROM)
 
+RBI_MASTER_CIRCULAR_URL = "https://www.rbi.org.in/Scripts/BS_ViewMasterCirculardetails.aspx"
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
@@ -117,6 +119,8 @@ class RBICrawler:
 
     def run(self):
         records = self.fetch_circular_index()
+        master  = self.fetch_master_circulars()
+        records = records + master
         if not records:
             log.error("No records found. Exiting.")
             return None
@@ -129,3 +133,42 @@ class RBICrawler:
         df.to_csv(METADATA_FILE, index=False)
         log.info(f"Done — {ok} downloaded, {fail} failed. Metadata saved.")
         return df
+
+    def fetch_master_circulars(self) -> list:
+        log.info(f"Fetching Master Circulars from {RBI_MASTER_CIRCULAR_URL}")
+        try:
+            resp = self.session.get(RBI_MASTER_CIRCULAR_URL, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            log.error(f"Failed to fetch master circulars: {e}")
+            return []
+
+        soup    = BeautifulSoup(resp.text, "html.parser")
+        records = []
+
+        for link in soup.find_all("a", href=True):
+            href = link["href"]
+            if ".pdf" not in href.lower():
+                continue
+            subject  = link.get_text(strip=True)
+            if not subject:
+                continue
+            pdf_url  = href if href.startswith("http") else f"{RBI_BASE_URL}/{href.lstrip('/')}"
+            filename = pdf_url.split("/")[-1]
+            if not filename.endswith(".pdf"):
+                filename = subject[:50].replace(" ","_").replace("/","_") + ".pdf"
+
+            records.append({
+                "circular_no": f"MC/{filename}",
+                "date":        "01.04.2025",
+                "department":  "Master Circular",
+                "subject":     subject,
+                "detail_url":  pdf_url,
+                "url":         pdf_url,
+                "filename":    filename,
+            })
+            if len(records) >= MAX_PDFS:
+                break
+
+        log.info(f"Found {len(records)} master circulars")
+        return records
