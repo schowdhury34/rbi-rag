@@ -13,11 +13,7 @@
 import sys, argparse, logging
 from pathlib import Path
 from datetime import date
-
-from langchain_groq import ChatGroq
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from langchain_community.embeddings import HuggingFaceEmbeddings
+import os
 
 import pandas as pd
 from datasets import Dataset
@@ -28,6 +24,8 @@ from ragas.metrics import (
     context_recall,
     context_precision,
 )
+from ragas.llms import llm_factory
+from ragas import RunConfig
 
 sys.path.append(str(Path(__file__).parent.parent))
 from retrieval.rag_chain import RAGChain
@@ -106,24 +104,44 @@ def build_ragas_dataset(df: pd.DataFrame, mode: str) -> Dataset:
 
 def run_eval(mode: str = "rag", split: str = "dev", save: bool = False):
     log.info(f"Starting RAGAS eval | mode={mode} | split={split}")
+    
+    # Configure RAGAS to use Groq instead of OpenAI
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        log.error("GROQ_API_KEY not found in environment variables")
+        log.info("Please set: $env:GROQ_API_KEY = 'your-groq-api-key'")
+        return
+    
+    # Create Groq LLM with single generation (n=1)
+    from ragas.llms import LangchainLLMWrapper
+    from langchain_groq import ChatGroq
+    
+    llm = LangchainLLMWrapper(
+        ChatGroq(
+            api_key=groq_api_key,
+            model="llama-3.3-70b-versatile",
+            temperature=0,
+            max_retries=2,  # Limit retries
+        )
+    )
+    
+    log.info(f"Using Groq LLM for evaluation: llama-3.3-70b-versatile")
 
     df      = load_eval_data(split)
     dataset = build_ragas_dataset(df, mode)
 
     log.info("Running RAGAS metrics...")
-    from config import GROQ_API_KEY, GROQ_MODEL
-    groq_llm      = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY)
-    evaluator_llm = LangchainLLMWrapper(groq_llm)
-    hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    ragas_emb     = LangchainEmbeddingsWrapper(hf_embeddings)
-
+    
+    # Run with single thread to avoid rate limits
     scores = evaluate(
         dataset,
         metrics=[faithfulness, answer_relevancy, context_recall, context_precision],
-        llm=evaluator_llm,
-        embeddings=ragas_emb,
-        raise_exceptions=False,
-        batch_size=1,
+        llm=llm,
+        run_config=RunConfig(
+            timeout=120,
+            max_retries=3,
+            max_wait=60,
+        )
     )
 
     results_df = scores.to_pandas()
