@@ -14,10 +14,10 @@ import sys, argparse, logging
 from pathlib import Path
 from datetime import date
 
-from langchain_groq import ChatGroq
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_ollama import ChatOllama
 
 import pandas as pd
 from datasets import Dataset
@@ -38,22 +38,22 @@ try:
 except ImportError:
     AGENT_AVAILABLE = False
     run_agent = None
-    
+
 from ingest.embedder import Embedder
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-EVAL_CSV   = Path(__file__).parent / "eval_dataset.csv"
-BENCH_DIR  = Path(__file__).parent.parent / "benchmarks"
+EVAL_CSV  = Path(__file__).parent / "eval_dataset.csv"
+BENCH_DIR = Path(__file__).parent.parent / "benchmarks"
 
 
 def load_eval_data(split: str = "dev") -> pd.DataFrame:
     """
     Returns eval rows.
-    split='dev'  → first 7 rows  (tune on these)
-    split='test' → last 3 rows   (held-out, final eval only)
-    split='all'  → all rows
+    split='dev'  -> first 7 rows  (tune on these)
+    split='test' -> last 3 rows   (held-out, final eval only)
+    split='all'  -> all rows
     """
     df = pd.read_csv(EVAL_CSV)
     if split == "dev":
@@ -67,10 +67,14 @@ def build_ragas_dataset(df: pd.DataFrame, mode: str) -> Dataset:
     """
     Runs each question through the RAG system / agent,
     collects (question, answer, contexts, ground_truth).
+    RAG answers use Groq (your actual system).
     """
-    if mode == "rag":
-        rag = RAGChain()
     embedder = Embedder()
+
+    if mode == "rag":
+        rag = RAGChain(use_rewriter=False, use_ollama=True)
+    elif mode == "agent" and not AGENT_AVAILABLE:
+        raise RuntimeError("Agent mode not available — ToolNode import failed.")
 
     questions, answers, contexts, ground_truths = [], [], [], []
 
@@ -82,7 +86,6 @@ def build_ragas_dataset(df: pd.DataFrame, mode: str) -> Dataset:
         if mode == "rag":
             result = rag.answer(q, return_sources=True)
             ans    = result["answer"]
-            # Get raw chunks for context
             chunks = embedder.query(q, top_k=5)
             ctx    = [c["text"] for c in chunks]
         else:
@@ -110,13 +113,12 @@ def run_eval(mode: str = "rag", split: str = "dev", save: bool = False):
     df      = load_eval_data(split)
     dataset = build_ragas_dataset(df, mode)
 
-    log.info("Running RAGAS metrics...")
-    from config import GROQ_API_KEY, GROQ_MODEL
-    groq_llm      = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY)
-    evaluator_llm = LangchainLLMWrapper(groq_llm)
+    log.info("Setting up Ollama as RAGAS judge (local, free, no rate limits)...")
+    evaluator_llm = LangchainLLMWrapper(ChatOllama(model="llama3.2", temperature=0))
     hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     ragas_emb     = LangchainEmbeddingsWrapper(hf_embeddings)
 
+    log.info("Running RAGAS metrics...")
     scores = evaluate(
         dataset,
         metrics=[faithfulness, answer_relevancy, context_recall, context_precision],
@@ -127,14 +129,14 @@ def run_eval(mode: str = "rag", split: str = "dev", save: bool = False):
     )
 
     results_df = scores.to_pandas()
-    print("\n" + "="*55)
+    print("\n" + "=" * 55)
     print(f"  RAGAS Results | mode={mode} | split={split}")
-    print("="*55)
+    print("=" * 55)
     print(f"  Faithfulness      : {results_df['faithfulness'].mean():.3f}")
     print(f"  Answer Relevancy  : {results_df['answer_relevancy'].mean():.3f}")
     print(f"  Context Recall    : {results_df['context_recall'].mean():.3f}")
     print(f"  Context Precision : {results_df['context_precision'].mean():.3f}")
-    print("="*55)
+    print("=" * 55)
 
     if save:
         BENCH_DIR.mkdir(exist_ok=True)
