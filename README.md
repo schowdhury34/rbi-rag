@@ -1,78 +1,169 @@
 # RBI Circular RAG System 🏦
 
-Open-source RAG system with LangGraph agent that crawls RBI circulars
-and answers regulatory queries with source citations.
+An open-source Retrieval-Augmented Generation system that indexes Reserve Bank of India regulatory circulars and answers compliance queries with source citations.
+
+Built as part of MTech AI & Data Science coursework at IIT Jodhpur.
+
+---
+
+## What it does
+
+- Crawls and indexes RBI Master Circulars and year-archive circulars
+- Answers natural language queries about RBI regulations
+- Returns answers grounded in actual circular text with circular number, date, and department citations
+- Runs a hybrid BM25 + vector search pipeline with LLM-based query rewriting and re-ranking
+
+---
 
 ## Architecture
+
 ```
 OFFLINE
-─────────────────────────────────────────────────
-RBI Website → Crawler (year-filtered) → PyMuPDF
-    → text cleaning → chunking
-    → sentence-transformers → ChromaDB (local)
+────────────────────────────────────────────
+RBI Website → Playwright downloader
+→ PyMuPDF text extraction
+→ RecursiveCharacterTextSplitter (chunking)
+→ sentence-transformers (all-MiniLM-L6-v2)
+→ ChromaDB (local vector store)
 
 ONLINE
-─────────────────────────────────────────────────
+────────────────────────────────────────────
 User Query
-    ↓
-QueryRewriter (expand abbreviations)
-    ↓
-[RAG mode]   Hybrid BM25 + Vector → Re-ranker → Groq LLM
-[Agent mode] LangGraph ReAct → Tools → Groq LLM
-    ↓
-Answer + Source Citations → Streamlit UI
+↓
+QueryRewriter (Groq Llama 3.3 70B)
+↓
+Hybrid BM25 + Vector Search
+↓
+LLM Re-ranker (cross-encoder scoring)
+↓
+Groq Llama 3.3 70B → Answer + Citations
+↓
+Streamlit UI
 ```
 
+---
+
 ## Stack
+
 | Layer | Tool |
 |---|---|
-| Crawling | requests + BeautifulSoup (year-filtered) |
-| PDF Parsing | PyMuPDF + text cleaning |
+| PDF Crawling | Playwright (headless Chromium) |
+| PDF Parsing | PyMuPDF |
 | Chunking | LangChain RecursiveCharacterTextSplitter |
-| Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
-| Vector Store | ChromaDB (cosine similarity, local) |
-| Search | Hybrid BM25 + Vector with score fusion |
-| Query Rewriting | Groq Llama 3.3 70B (pre-retrieval) |
-| Re-ranking | LLM cross-encoder scoring (post-retrieval) |
-| Agent | LangGraph ReAct (3 tools) |
-| LLM | Groq API — Llama 3.3 70B (free tier) |
-| Evaluation | RAGAS — 4 metrics, 20 Q&A pairs |
-| UI | Streamlit (multi-page) |
+| Embeddings | sentence-transformers all-MiniLM-L6-v2 |
+| Vector Store | ChromaDB (local, persistent) |
+| Keyword Search | BM25 (rank-bm25) |
+| LLM | Groq API — Llama 3.3 70B |
+| Evaluation | RAGAS 0.4.3 (4 metrics, 20 Q&A pairs) |
+| UI | Streamlit |
 
-## Quick Start
+---
+
+## Setup
+
 ```bash
 git clone https://github.com/schowdhury34/rbi-rag.git
 cd rbi-rag
 pip install -r requirements.txt
 cp .env.example .env        # add your GROQ_API_KEY
-python scripts/run_ingestion.py
+```
+
+Install Playwright browser for PDF downloading:
+```bash
+playwright install chromium
+```
+
+---
+
+## Usage
+
+### Download RBI circulars
+```bash
+python crawl/pdf_downloader.py --limit 21
+```
+Uses a headless browser to bypass bot protection on rbidocs.rbi.org.in.
+
+### Ingest into vector store
+```bash
+python scripts/run_ingestion.py --skip-crawl
+```
+
+### Launch the UI
+```bash
 python run.py
 ```
+Opens at http://localhost:8501
 
-## Scripts
+### Run evaluation
 ```bash
-python scripts/run_ingestion.py            # crawl + parse + embed
-python scripts/run_ingestion.py --limit 10 # test on 10 PDFs
-python scripts/test_pipeline.py            # smoke test
 python eval/ragas_eval.py --mode rag --split dev --save
-python eval/benchmark.py --compare
 ```
 
+---
+
+## Evaluation Results
+
+Evaluated on 7 dev-split questions using RAGAS with Llama 3.3 70B as judge:
+
+| Metric | Score |
+|---|---|
+| Answer Relevancy | 0.79 |
+| Context Recall | 0.75 |
+| Context Precision | 0.48 |
+| Faithfulness | In progress |
+
+---
+
 ## Project Structure
+
 ```
 rbi-rag/
 ├── config.py
-├── crawl/rbi_crawler.py
-├── ingest/pdf_parser.py + embedder.py
-├── retrieval/hybrid_search.py + rag_chain.py
-│            query_rewriter.py + reranker.py
-├── agent/tools.py + rbi_agent.py
-├── eval/eval_dataset.csv + ragas_eval.py + benchmark.py
-├── benchmarks/
-├── scripts/run_ingestion.py + test_pipeline.py
-├── utils/logger.py + filters.py
-└── app/streamlit_app.py + pages/ + styles.py
+├── run.py
+├── crawl/
+│   ├── rbi_crawler.py          # year-archive circular crawler
+│   └── pdf_downloader.py       # Playwright-based PDF downloader
+├── ingest/
+│   ├── pdf_parser.py           # PyMuPDF text extraction + chunking
+│   └── embedder.py             # sentence-transformers + ChromaDB
+├── retrieval/
+│   ├── hybrid_search.py        # BM25 + vector fusion
+│   ├── rag_chain.py            # RAG pipeline (Groq or Ollama)
+│   ├── query_rewriter.py       # LLM query expansion
+│   └── reranker.py             # LLM cross-encoder re-ranking
+├── agent/
+│   └── rbi_agent.py            # LangGraph ReAct agent (WIP)
+├── eval/
+│   ├── eval_dataset.csv        # 20 Q&A pairs
+│   └── ragas_eval.py           # RAGAS evaluation pipeline
+├── benchmarks/                 # saved eval results
+├── scripts/
+│   ├── run_ingestion.py        # end-to-end ingestion pipeline
+│   └── test_pipeline.py        # smoke test
+├── app/
+│   └── streamlit_app.py        # multi-mode chat UI
+└── utils/
+    ├── logger.py
+    └── filters.py
 ```
 
+---
+
+## Notes
+
+- RBI's PDF infrastructure uses Akamai bot protection. Direct HTTP downloads return challenge pages. The Playwright downloader handles this by running a real browser session.
+- `data/pdfs/` and `data/chroma_db/` are gitignored. Run the downloader and ingestion pipeline after cloning.
+- Agent mode (LangGraph ReAct) is functional in architecture but has a pending dependency issue with `langgraph.prebuilt.ToolNode` in langgraph 1.x.
+
+---
+
+## Contributors
+
+- [Samrat Chowdhury](https://github.com/schowdhury34) — RAG pipeline, crawler, evaluation
+- [Nisha Chowdhury](https://github.com/G24AIT101) — Streamlit UI
+
+---
+
 ## Disclaimer
-Educational/research use only.
+
+Educational and research use only. Always refer to official RBI circulars at rbi.org.in for compliance decisions.
