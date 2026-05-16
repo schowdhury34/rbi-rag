@@ -103,7 +103,7 @@ python eval/ragas_eval.py --mode rag --split dev --save
 
 ## Evaluation Results
 
-Evaluated on 7 dev-split questions using RAGAS with Llama 3.3 70B as judge:
+
 
 | Metric | Score |
 |---|---|
