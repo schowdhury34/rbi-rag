@@ -3,8 +3,6 @@ import sys
 from pathlib import Path
 import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
-from retrieval.rag_chain import RAGChain
-#from agent.rbi_agent import run_agent
 from ingest.embedder import Embedder
 from config import GROQ_MODEL
 
@@ -50,38 +48,57 @@ with st.sidebar:
 st.title("RBI Circular Assistant 🏦")
 st.caption(f"Mode: **{mode}**")
 
-# ── Collection check ──────────────────────────────────────────────────
-@st.cache_resource(show_spinner="Connecting to vector store...")
-def check_collection() -> int:
+
+# ── Auto-ingest on first run (for Streamlit Cloud) ────────────────────
+@st.cache_resource(show_spinner="Setting up knowledge base...")
+def setup_collection() -> int:
     try:
-        return Embedder().collection.count()
-    except Exception:
+        embedder = Embedder()
+        count = embedder.collection.count()
+        if count == 0:
+            from ingest.pdf_parser import PDFParser
+            pdf_dir = Path(__file__).parent.parent / "data" / "pdfs"
+            if not any(pdf_dir.glob("*.pdf")) and not any(pdf_dir.glob("*.PDF")):
+                return 0
+            parser = PDFParser()
+            chunks = parser.parse_all()
+            if chunks:
+                embedder.embed_and_store(chunks)
+                count = embedder.collection.count()
+        return count
+    except Exception as e:
+        st.error(f"Setup error: {e}")
         return 0
 
-count = check_collection()
+
+count = setup_collection()
 if count == 0:
     st.warning(
-        "Vector store is empty. Run the ingestion pipeline first.\n\n"
-        "See README.md for setup instructions."
+        "No circulars indexed yet. Add PDFs to `data/pdfs/` and restart, "
+        "or run: `python scripts/run_ingestion.py --skip-crawl`"
     )
     st.stop()
 
 st.caption(f"📚 {count:,} chunks indexed")
 
+
 # ── RAG system ────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading RAG system...")
-def load_rag(): return RAGChain()
+def load_rag():
+    from retrieval.rag_chain import RAGChain
+    return RAGChain()
 
 try:
     rag = load_rag()
 except ValueError as e:
-    st.error(str(e)); st.stop()
+    st.error(str(e))
+    st.stop()
 
 # ── Session state ─────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ── Welcome screen — shown only before first message ──────────────────
+# ── Welcome screen ────────────────────────────────────────────────────
 if not st.session_state.messages:
     st.markdown("### What would you like to know?")
     sample_questions = [
@@ -112,13 +129,17 @@ for msg in st.session_state.messages:
                         f"{s.get('department','N/A')}"
                     )
 
+
 # ── Shared answer function ────────────────────────────────────────────
 def process_query(query: str):
     with st.chat_message("assistant"):
         with st.spinner("Searching circulars..."):
             if mode == "Agent (LangGraph)":
                 if not AGENT_AVAILABLE:
-                    result = {"answer": "Agent mode is temporarily unavailable. Please use RAG (Hybrid Search) mode.", "sources": []}
+                    result = {
+                        "answer": "Agent mode is temporarily unavailable. Please use RAG (Hybrid Search) mode.",
+                        "sources": []
+                    }
                 else:
                     result = run_agent(query)
             else:
@@ -145,7 +166,8 @@ def process_query(query: str):
         "sources": sources
     })
 
-# Handle sample button clicks (last message is user but unprocessed)
+
+# Handle sample button clicks
 if (st.session_state.messages
         and st.session_state.messages[-1]["role"] == "user"
         and not st.session_state.messages[-1].get("processed")):

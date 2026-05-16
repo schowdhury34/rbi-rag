@@ -1,9 +1,13 @@
 __pycache__/
 *.pyc
 .env
-*.pdf
-data/
 logs/
 .DS_Store
 .venv/
+
+# Keep data folder but exclude large/sensitive items
+data/chroma_db/
+data/metadata.csv
+
+# Keep benchmarks
 !benchmarks/*.csv
