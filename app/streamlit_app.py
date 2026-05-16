@@ -101,13 +101,14 @@ if "messages" not in st.session_state:
 # ── Welcome screen ────────────────────────────────────────────────────
 if not st.session_state.messages:
     st.markdown("### What would you like to know?")
+   
     sample_questions = [
-        "What are the KYC guidelines for bank account opening?",
-        "Explain MCLR and how it affects loan interest rates",
-        "What is the Liquidity Coverage Ratio requirement?",
-        "What are the RBI guidelines for digital lending apps?",
-        "What is Priority Sector Lending target for banks?",
-        "What are the Basel III capital adequacy requirements?",
+    "What are the prudential norms on capital adequacy for UCBs?",
+    "What are RBI guidelines for bank finance to NBFCs?",
+    "What are the income recognition and asset classification norms?",
+    "What are RBI guidelines for housing finance by UCBs?",
+    "What are the exposure norms for Urban Co-operative Banks?",
+    "What is the SHG-Bank Linkage Programme?",
     ]
     cols = st.columns(2)
     for idx, q in enumerate(sample_questions):
