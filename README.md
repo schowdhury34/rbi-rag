@@ -107,10 +107,12 @@ Evaluated on 7 dev-split questions using RAGAS with Llama 3.3 70B as judge:
 
 | Metric | Score |
 |---|---|
-| Answer Relevancy | 0.79 |
-| Context Recall | 0.75 |
-| Context Precision | 0.48 |
-| Faithfulness | In progress |
+| Faithfulness | 0.639 |
+| Answer Relevancy | 0.596 |
+| Context Recall | 0.361 |
+| Context Precision | 0.876 |
+
+*Evaluated on 7 dev-split questions using RAGAS 0.4.3 with Mistral 7B as local judge.*
 
 ---
 
