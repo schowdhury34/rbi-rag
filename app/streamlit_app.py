@@ -125,7 +125,7 @@ for msg in st.session_state.messages:
             with st.expander("📄 Sources"):
                 for s in msg["sources"]:
                     st.markdown(
-                        f"**{s.get('circular_no','N/A')}** "
+                        f"**{s.get('subject', s.get('circular_no','N/A'))[:80]}** "
                         f"({s.get('date','N/A')}) — "
                         f"{s.get('department','N/A')}"
                     )
@@ -156,7 +156,7 @@ def process_query(query: str):
             with st.expander("📄 Source Circulars"):
                 for s in sources:
                     st.markdown(
-                        f"**{s.get('circular_no','N/A')}** "
+                        f"**{s.get('subject', s.get('circular_no','N/A'))[:80]}** "
                         f"({s.get('date','N/A')}) — "
                         f"{s.get('department','N/A')}"
                         f"\n> {s.get('subject','')[:100]}"
