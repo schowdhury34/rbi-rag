@@ -2,7 +2,7 @@
 
 An open-source Retrieval-Augmented Generation system that indexes Reserve Bank of India regulatory circulars and answers compliance queries with source citations.
 
-Built as part of MTech AI & Data Science coursework at IIT Jodhpur.
+Built as a portfolio project demonstrating GenAI and RAG engineering for BFSI regulatory use cases.
 
 ---
 
@@ -154,7 +154,7 @@ rbi-rag/
 ## Notes
 
 - RBI's PDF infrastructure uses Akamai bot protection. Direct HTTP downloads return challenge pages. The Playwright downloader handles this by running a real browser session.
-- `data/pdfs/` and `data/chroma_db/` are gitignored. Run the downloader and ingestion pipeline after cloning.
+- data/pdfs/ is tracked in git (27 RBI Master Circulars). data/chroma_db/ is gitignored and rebuilt on startup.
 - Agent mode (LangGraph ReAct) is functional in architecture but has a pending dependency issue with `langgraph.prebuilt.ToolNode` in langgraph 1.x.
 
 ---
