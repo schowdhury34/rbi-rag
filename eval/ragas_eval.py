@@ -6,11 +6,11 @@
 #   - context_precision: were retrieved chunks relevant?
 #
 # Usage:
-#   python eval/ragas_eval.py --mode rag         # evaluate RAG chain
-#   python eval/ragas_eval.py --mode agent       # evaluate agent
-#   python eval/ragas_eval.py --mode rag --save  # save results to benchmarks/
+#   python eval/ragas_eval.py --mode rag              # evaluate RAG chain
+#   python eval/ragas_eval.py --mode rag --split all  # all 20 questions
+#   python eval/ragas_eval.py --mode rag --save       # save results to benchmarks/
 
-import sys, argparse, logging
+import sys, argparse, logging, os
 from pathlib import Path
 from datetime import date
 
@@ -44,16 +44,23 @@ from ingest.embedder import Embedder
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-EVAL_CSV  = Path(__file__).parent / "eval_dataset.csv"
-BENCH_DIR = Path(__file__).parent.parent / "benchmarks"
+EVAL_CSV     = Path(__file__).parent / "eval_dataset.csv"
+BENCH_DIR    = Path(__file__).parent.parent / "benchmarks"
+OLLAMA_MODEL = "mistral"
 
+# Give Ollama more time per call — mistral is slower than cloud APIs
+os.environ["RAGAS_MAX_WAIT"] = "600"
+
+# Patch RAGAS executor timeout for slow local models
+import ragas.executor as _rex
+_rex.DEFAULT_TIMEOUT = 600  # 10 minutes per job
 
 def load_eval_data(split: str = "dev") -> pd.DataFrame:
     """
     Returns eval rows.
     split='dev'  -> first 7 rows  (tune on these)
     split='test' -> last 3 rows   (held-out, final eval only)
-    split='all'  -> all rows
+    split='all'  -> all 20 rows
     """
     df = pd.read_csv(EVAL_CSV)
     if split == "dev":
@@ -67,14 +74,15 @@ def build_ragas_dataset(df: pd.DataFrame, mode: str) -> Dataset:
     """
     Runs each question through the RAG system / agent,
     collects (question, answer, contexts, ground_truth).
-    RAG answers use Groq (your actual system).
+    Uses Ollama mistral locally — no API keys, no rate limits.
     """
     embedder = Embedder()
 
     if mode == "rag":
         rag = RAGChain(use_rewriter=False, use_ollama=True)
-    elif mode == "agent" and not AGENT_AVAILABLE:
-        raise RuntimeError("Agent mode not available — ToolNode import failed.")
+    elif mode == "agent":
+        if not AGENT_AVAILABLE:
+            raise RuntimeError("Agent mode not available — ToolNode import failed.")
 
     questions, answers, contexts, ground_truths = [], [], [], []
 
@@ -108,15 +116,24 @@ def build_ragas_dataset(df: pd.DataFrame, mode: str) -> Dataset:
 
 
 def run_eval(mode: str = "rag", split: str = "dev", save: bool = False):
-    log.info(f"Starting RAGAS eval | mode={mode} | split={split}")
+    log.info(f"Starting RAGAS eval | mode={mode} | split={split} | judge={OLLAMA_MODEL} (local)")
 
     df      = load_eval_data(split)
     dataset = build_ragas_dataset(df, mode)
 
-    log.info("Setting up Ollama as RAGAS judge (local, free, no rate limits)...")
-    evaluator_llm = LangchainLLMWrapper(ChatOllama(model="llama3.2", temperature=0))
+    log.info(f"Setting up {OLLAMA_MODEL} as RAGAS judge (local, free, no rate limits)...")
+    evaluator_llm = LangchainLLMWrapper(ChatOllama(model=OLLAMA_MODEL, temperature=0))
     hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     ragas_emb     = LangchainEmbeddingsWrapper(hf_embeddings)
+
+
+    from ragas.executor import RunConfig
+    run_config = RunConfig(
+        timeout=600,       # 10 min per job
+        max_retries=3,
+        max_workers=1,     # sequential — CPU can't handle parallel Mistral calls
+        max_wait=120,
+    )
 
     log.info("Running RAGAS metrics...")
     scores = evaluate(
@@ -125,12 +142,13 @@ def run_eval(mode: str = "rag", split: str = "dev", save: bool = False):
         llm=evaluator_llm,
         embeddings=ragas_emb,
         raise_exceptions=False,
-        batch_size=1,
+        run_config=run_config,
     )
 
     results_df = scores.to_pandas()
     print("\n" + "=" * 55)
     print(f"  RAGAS Results | mode={mode} | split={split}")
+    print(f"  Judge: {OLLAMA_MODEL} (local Ollama)")
     print("=" * 55)
     print(f"  Faithfulness      : {results_df['faithfulness'].mean():.3f}")
     print(f"  Answer Relevancy  : {results_df['answer_relevancy'].mean():.3f}")

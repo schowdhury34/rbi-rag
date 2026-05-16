@@ -9,6 +9,8 @@ from config import GROQ_API_KEY, GROQ_MODEL, SYSTEM_PROMPT, TOP_K
 
 log = logging.getLogger(__name__)
 
+OLLAMA_MODEL = "mistral"
+
 
 class RAGChain:
     def __init__(self, use_rewriter: bool = True, use_ollama: bool = False):
@@ -16,10 +18,10 @@ class RAGChain:
 
         if use_ollama:
             from langchain_ollama import ChatOllama
-            self.ollama_llm = ChatOllama(model="llama3.2", temperature=0)
+            self.ollama_llm = ChatOllama(model=OLLAMA_MODEL, temperature=0)
             self.llm = None
             log.info(
-                f"RAGChain ready | model=llama3.2 (Ollama local) | "
+                f"RAGChain ready | model={OLLAMA_MODEL} (Ollama local) | "
                 f"rewriter={'on' if use_rewriter else 'off'}"
             )
         else:
