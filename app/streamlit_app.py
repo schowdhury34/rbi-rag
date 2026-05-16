@@ -102,13 +102,14 @@ if "messages" not in st.session_state:
 if not st.session_state.messages:
     st.markdown("### What would you like to know?")
    
+   
     sample_questions = [
-    "What are the prudential norms on capital adequacy for UCBs?",
+    "What are the Priority Sector Lending targets for commercial banks?",
+    "How are fraud cases classified and reported by banks to RBI?",
+    "What are the interest rate guidelines for advances by commercial banks?",
+    "What are RBI guidelines for Housing Finance Companies?",
+    "What are the prudential norms for income recognition and asset classification?",
     "What are RBI guidelines for bank finance to NBFCs?",
-    "What are the income recognition and asset classification norms?",
-    "What are RBI guidelines for housing finance by UCBs?",
-    "What are the exposure norms for Urban Co-operative Banks?",
-    "What is the SHG-Bank Linkage Programme?",
     ]
     cols = st.columns(2)
     for idx, q in enumerate(sample_questions):
