@@ -12,7 +12,11 @@ DATA_DIR  = BASE_DIR / "data"
 PDF_DIR    = DATA_DIR / "pdfs"
 
 # On Streamlit Cloud the repo is read-only — use /tmp for ChromaDB
-_on_streamlit = os.path.exists("/mount/src")
+_on_streamlit = (
+    os.path.exists("/mount/src") or
+    os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+    "/mount" in str(Path(__file__).parent)
+)
 CHROMA_DIR = Path("/tmp/chroma_db") if _on_streamlit else DATA_DIR / "chroma_db"
 
 METADATA_FILE = DATA_DIR / "metadata.csv"
