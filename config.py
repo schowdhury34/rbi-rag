@@ -9,13 +9,17 @@ load_dotenv()
 BASE_DIR  = Path(__file__).parent
 DATA_DIR  = BASE_DIR / "data"
 
-PDF_DIR       = DATA_DIR / "pdfs"
-CHROMA_DIR    = DATA_DIR / "chroma_db"
+PDF_DIR    = DATA_DIR / "pdfs"
+
+# On Streamlit Cloud the repo is read-only — use /tmp for ChromaDB
+_on_streamlit = os.path.exists("/mount/src")
+CHROMA_DIR = Path("/tmp/chroma_db") if _on_streamlit else DATA_DIR / "chroma_db"
+
 METADATA_FILE = DATA_DIR / "metadata.csv"
 
 # Create data dirs on import — avoids FileNotFoundError on first run
 PDF_DIR.mkdir(parents=True, exist_ok=True)
-CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+#CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 RBI_BASE_URL       = "https://rbi.org.in"
 RBI_CIRCULAR_INDEX = "https://rbi.org.in/Scripts/BS_CircularIndexDisplay.aspx"
