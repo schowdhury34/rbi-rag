@@ -49,44 +49,46 @@ st.title("RBI Circular Assistant 🏦")
 st.caption(f"Mode: **{mode}**")
 
 
-# ── Auto-ingest on first run (for Streamlit Cloud) ────────────────────
-@st.cache_resource(show_spinner="Setting up knowledge base...")
-def setup_collection(version: int = 6) -> int:
+# ── Auto-ingest on first run ──────────────────────────────────────────
+def setup_collection() -> int:
     try:
         from pathlib import Path as _Path
         import shutil
         from config import CHROMA_DIR
-        
 
         pdf_dir   = _Path(__file__).parent.parent / "data" / "pdfs"
-        chroma_dir = _Path(__file__).parent.parent / "data" / "chroma_db"
-        pdf_count  = len(list(pdf_dir.glob("*.pdf")) + list(pdf_dir.glob("*.PDF")))
+        pdf_count = len(list(pdf_dir.glob("*.pdf")) + list(pdf_dir.glob("*.PDF")))
 
         embedder = Embedder()
         count    = embedder.collection.count()
 
-        # If chunk count looks stale (less than 100 per PDF on average), wipe and re-index
         if count < pdf_count * 50:
-            st.info(f"Re-indexing {pdf_count} PDFs ({count} chunks found, expected more)...")
-            if chroma_dir.exists():
-                shutil.rmtree(chroma_dir)
-            embedder = Embedder()  # fresh instance
-            count = 0
+            if CHROMA_DIR.exists():
+                shutil.rmtree(CHROMA_DIR)
+            embedder = Embedder()
+            count    = 0
 
         if count == 0:
             from ingest.pdf_parser import PDFParser
             if not pdf_count:
                 return 0
-            parser = PDFParser()
-            chunks = parser.parse_all()
-            if chunks:
-                embedder.embed_and_store(chunks)
-                count = embedder.collection.count()
+            with st.spinner(f"Indexing {pdf_count} RBI circulars — please wait..."):
+                parser = PDFParser()
+                chunks = parser.parse_all()
+                if chunks:
+                    embedder.embed_and_store(chunks)
+                    count = embedder.collection.count()
 
         return count
     except Exception as e:
         st.error(f"Setup error: {e}")
         return 0
+
+
+if "collection_count" not in st.session_state:
+    st.session_state.collection_count = setup_collection()
+
+count = st.session_state.collection_count
 
 
 count = setup_collection()
