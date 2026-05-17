@@ -51,20 +51,36 @@ st.caption(f"Mode: **{mode}**")
 
 # ── Auto-ingest on first run (for Streamlit Cloud) ────────────────────
 @st.cache_resource(show_spinner="Setting up knowledge base...")
-def setup_collection() -> int:
+def setup_collection(version: int = 4) -> int:
     try:
+        from pathlib import Path as _Path
+        import shutil
+
+        pdf_dir   = _Path(__file__).parent.parent / "data" / "pdfs"
+        chroma_dir = _Path(__file__).parent.parent / "data" / "chroma_db"
+        pdf_count  = len(list(pdf_dir.glob("*.pdf")) + list(pdf_dir.glob("*.PDF")))
+
         embedder = Embedder()
-        count = embedder.collection.count()
+        count    = embedder.collection.count()
+
+        # If chunk count looks stale (less than 100 per PDF on average), wipe and re-index
+        if count < pdf_count * 50:
+            st.info(f"Re-indexing {pdf_count} PDFs ({count} chunks found, expected more)...")
+            if chroma_dir.exists():
+                shutil.rmtree(chroma_dir)
+            embedder = Embedder()  # fresh instance
+            count = 0
+
         if count == 0:
             from ingest.pdf_parser import PDFParser
-            pdf_dir = Path(__file__).parent.parent / "data" / "pdfs"
-            if not any(pdf_dir.glob("*.pdf")) and not any(pdf_dir.glob("*.PDF")):
+            if not pdf_count:
                 return 0
             parser = PDFParser()
             chunks = parser.parse_all()
             if chunks:
                 embedder.embed_and_store(chunks)
                 count = embedder.collection.count()
+
         return count
     except Exception as e:
         st.error(f"Setup error: {e}")
