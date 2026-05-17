@@ -55,6 +55,8 @@ def setup_collection(version: int = 4) -> int:
     try:
         from pathlib import Path as _Path
         import shutil
+        from config import CHROMA_DIR
+        st.write(f"DEBUG: ChromaDB path = {CHROMA_DIR}")  # temporary debug line
 
         pdf_dir   = _Path(__file__).parent.parent / "data" / "pdfs"
         chroma_dir = _Path(__file__).parent.parent / "data" / "chroma_db"
