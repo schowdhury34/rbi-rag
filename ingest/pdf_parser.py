@@ -92,7 +92,7 @@ class PDFParser:
         return docs
 
     def parse_all(self, limit=None) -> list:
-        pdfs = sorted(PDF_DIR.glob("*.pdf"))
+        pdfs = sorted(PDF_DIR.glob("*.pdf")) + sorted(PDF_DIR.glob("*.PDF"))
         if limit:
             pdfs = pdfs[:limit]
         log.info(f"Parsing {len(pdfs)} PDFs...")
